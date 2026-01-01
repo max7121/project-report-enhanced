@@ -340,11 +340,14 @@
                             Project {Math.ceil(currentSlide / 2)} / {totalProjects}
                         </span>
                         <h2 className="text-4xl font-black text-slate-800 tracking-tight flex items-baseline gap-4">
-                            {machine?.name || project.name}
+                            {project.name}
                             <span className="text-2xl font-light text-slate-400">| {subTitle}</span>
                         </h2>
                     </div>
                     <div className="flex gap-6 text-sm text-slate-500 font-medium">
+                        <span className="flex items-center gap-1.5 bg-slate-100 px-3 py-1 rounded-full">
+                            <span className="text-indigo-500">🏭</span> {machine?.name || 'N/A'}
+                        </span>
                         <span className="flex items-center gap-1.5 bg-slate-100 px-3 py-1 rounded-full">
                             <span className="text-indigo-500">📦</span> {machine?.code || 'N/A'}
                         </span>
@@ -866,12 +869,36 @@
             }, []);
 
             const activeProjects = useMemo(() => {
-                return projects.filter(p => {
+                const filtered = projects.filter(p => {
                     if (!p.machineId) return false;
                     const machine = machines.find(m => m.id === p.machineId);
-                    return machine && machine.status === 'Active' && p.progress < 100;
+                    // 顯示所有Active機台下的專案（不限進度）
+                    return machine && machine.status === 'Active';
                 });
-            }, [projects, machines]);
+                
+                // 按機台ID排序，讓相同機台的專案排在一起
+                const sorted = filtered.sort((a, b) => {
+                    // 先按機台ID排序
+                    if (a.machineId !== b.machineId) {
+                        return a.machineId.localeCompare(b.machineId);
+                    }
+                    // 同機台內按專案名稱排序
+                    return (a.name || '').localeCompare(b.name || '');
+                });
+                
+                console.log('🔍 Active Projects:', sorted.length);
+                
+                // 特別檢查娃娃機專案
+                const dollMachines = sorted.filter(p => p.name && p.name.includes('娃娃機'));
+                console.log('🎮 娃娃機專案:', dollMachines.map(p => ({
+                    name: p.name,
+                    machineId: p.machineId,
+                    progress: p.progress,
+                    taskCount: tasks.filter(t => t.projectId === p.id).length
+                })));
+                
+                return sorted;
+            }, [projects, machines, tasks]);
 
             // 計算總頁數: 1 (Cover) + 1 (Resource Overview) + Projects * 2 (Overview + Gantt)
             const totalSlides = 2 + (activeProjects.length * 2);
@@ -1021,7 +1048,7 @@
                     const project = projects.find(p => p.id === t.projectId);
                     if (!project || !project.machineId) return false;
                     const machine = machines.find(m => m.id === project.machineId);
-                    return machine && machine.status === 'Active' && project.progress < 100;
+                    return machine && machine.status === 'Active';
                 });
 
                 const globalWorkload = {};
@@ -1228,13 +1255,13 @@
                     });
                     
                     // 專案名稱 - 大標題
-                    overviewSlide.addText(machine?.name || project.name, {
+                    overviewSlide.addText(project.name || machine?.name, {
                         x: 0.3, y: 0.7, w: 6.5, h: 0.5,
                         fontSize: 28, bold: true, color: '1E293B'
                     });
                     
-                    // 子標題
-                    overviewSlide.addText('Project Overview | 專案總覽', {
+                    // 子標題 - 機台資訊
+                    overviewSlide.addText(`機台: ${machine?.name || 'N/A'} (${machine?.code || 'N/A'}) | Project Overview`, {
                         x: 0.3, y: 1.15, w: 6.5, h: 0.25,
                         fontSize: 11, color: '64748B', italic: true
                     });
@@ -1469,7 +1496,7 @@
                     }
                     
                     // 頁腳
-                    overviewSlide.addText(`Page ${(idx * 2) + 2} | ${machine?.name || project.name}`, {
+                    overviewSlide.addText(`Page ${(idx * 2) + 2} | ${project.name || machine?.name}`, {
                         x: 0.3, y: 5.5, w: 9.4, h: 0.18,
                         fontSize: 7, color: '94A3B8',
                         align: 'left'
@@ -1497,11 +1524,11 @@
                     });
                     
                     // 標題
-                    ganttSlide.addText(`${machine?.name || project.name}`, {
+                    ganttSlide.addText(`${project.name || machine?.name}`, {
                         x: 0.3, y: 0.7, w: 7, h: 0.5,
                         fontSize: 28, bold: true, color: '1E293B'
                     });
-                    ganttSlide.addText(`完整專案時程表 | Detailed Schedule (${projectTasks.length} Tasks)`, {
+                    ganttSlide.addText(`機台: ${machine?.name || 'N/A'} (${machine?.code || 'N/A'}) | Detailed Schedule (${projectTasks.length} Tasks)`, {
                         x: 0.3, y: 1.15, w: 7, h: 0.3,
                         fontSize: 13, color: '64748B', italic: true
                     });
@@ -1667,7 +1694,7 @@
                     }
                     
                     // 頁腳
-                    ganttSlide.addText(`Page ${(idx * 2) + 3} | ${machine?.name || project.name} - Schedule`, {
+                    ganttSlide.addText(`Page ${(idx * 2) + 3} | ${project.name || machine?.name} - Schedule`, {
                         x: 0.3, y: 5.5, w: 9.4, h: 0.18,
                         fontSize: 7, color: '94A3B8',
                         align: 'left'
@@ -1748,7 +1775,7 @@
                         const project = projects.find(p => p.id === t.projectId);
                         if (!project || !project.machineId) return false;
                         const machine = machines.find(m => m.id === project.machineId);
-                        return machine && machine.status === 'Active' && project.progress < 100;
+                        return machine && machine.status === 'Active';
                     });
 
                     const globalWorkload = {};
