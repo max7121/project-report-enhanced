@@ -1,0 +1,2047 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>R&D 專案會報簡報 (含人力負載分析)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- PptxGenJS for PowerPoint Export -->
+    <script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
+    
+    <!-- Firebase SDKs -->
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+        import { getFirestore, collection, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+        
+        window.firebase = { initializeApp, getFirestore, collection, onSnapshot };
+    </script>
+    
+    <script type="importmap">
+    {
+        "imports": {
+            "react": "https://esm.sh/react@18.2.0",
+            "react-dom": "https://esm.sh/react-dom@18.2.0",
+            "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
+            "lucide-react": "https://esm.sh/lucide-react@0.294.0?external=react"
+        }
+    }
+    </script>
+    
+    <style>
+        /* 自定義字體與動畫 */
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700;900&display=swap');
+
+        body {
+            font-family: 'Noto Sans TC', sans-serif;
+            background: #0f172a; /* Slate 900 */
+            color: #1e293b;
+            overflow: hidden;
+            margin: 0;
+            padding: 0;
+            cursor: default;
+        }
+
+        /* 投影片過渡動畫 */
+        .fade-enter {
+            opacity: 0;
+            transform: scale(0.98);
+        }
+        .fade-enter-active {
+            opacity: 1;
+            transform: scale(1);
+            transition: opacity 300ms ease-out, transform 300ms cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        
+        /* 滾動條美化 */
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 3px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+
+        /* 雷射筆游標樣式 */
+        .cursor-laser {
+            cursor: none !important;
+        }
+        #laser-dot {
+            position: fixed;
+            width: 20px;
+            height: 20px;
+            background: rgba(239, 68, 68, 0.8);
+            border: 2px solid white;
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 9999;
+            box-shadow: 0 0 10px rgba(239, 68, 68, 0.8), 0 0 20px rgba(239, 68, 68, 0.4);
+            transition: transform 0.05s linear;
+            mix-blend-mode: hard-light;
+        }
+
+        /* 列印設定 */
+        @media print {
+            @page {
+                size: A4 landscape;
+                margin: 0;
+            }
+            body {
+                background: white;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+                overflow: visible;
+            }
+            .no-print { display: none !important; }
+            .slide-container {
+                width: 100% !important;
+                height: 100% !important;
+                padding: 0 !important;
+                display: block !important;
+            }
+            .slide {
+                box-shadow: none !important;
+                border-radius: 0 !important;
+                page-break-after: always;
+                height: 100vh !important;
+                width: 100vw !important;
+            }
+            /* 強制背景色列印 */
+            .bg-gradient-to-br {
+                background-color: #f8fafc !important; /* Fallback */
+            }
+            /* 列印時隱藏側邊欄 */
+            .drawer-panel {
+                display: none !important;
+            }
+        }
+        
+        .slide-container {
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+            position: relative;
+            transition: padding 0.3s ease;
+        }
+
+        .slide-container.focus-mode {
+            padding: 0;
+        }
+        
+        .slide {
+            width: 100%;
+            max-width: 1600px;
+            aspect-ratio: 16/9;
+            height: auto;
+            max-height: 90vh;
+            background: white;
+            border-radius: 1.5rem;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            overflow: hidden;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            transition: all 0.3s ease;
+        }
+
+        .slide-container.focus-mode .slide {
+            max-width: 100vw;
+            max-height: 100vh;
+            border-radius: 0;
+            height: 100vh;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel" data-type="module">
+        import ReactDOM from 'react-dom/client';
+        import React, { useState, useEffect, useMemo, memo, useRef } from 'react';
+        import { 
+            ChevronLeft, ChevronRight, Printer, Home, 
+            FileText, MessageSquare, AlertTriangle, ListTodo,
+            TrendingUp, Users, Target, CheckCircle, Calendar,
+            Clock, ArrowRight, MousePointer2, Maximize2, Minimize2,
+            PenTool, Timer, Plus, Trash2, Save, X, Activity, User, BarChart2,
+            Download
+        } from 'lucide-react';
+
+        // --- Firebase Config ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyCMQqRd2JQlRpBsERWUkUpAqFSGBM_UmP0",
+            authDomain: "rdsystemdatabase.firebaseapp.com",
+            projectId: "rdsystemdatabase",
+            storageBucket: "rdsystemdatabase.firebasestorage.app",
+            messagingSenderId: "321370607244",
+            appId: "1:321370607244:web:eaf0c8dc0ea9ca8212f5a9",
+            measurementId: "G-T9PL70TLJ2"
+        };
+
+        const app = window.firebase.initializeApp(firebaseConfig);
+        const db = window.firebase.getFirestore(app);
+
+        // --- 功能組件: 會議計時器 ---
+        const MeetingTimer = memo(() => {
+            const [time, setTime] = useState(0);
+            const [isRunning, setIsRunning] = useState(false);
+
+            useEffect(() => {
+                let interval;
+                if (isRunning) {
+                    interval = setInterval(() => setTime(t => t + 1), 1000);
+                }
+                return () => clearInterval(interval);
+            }, [isRunning]);
+
+            const formatTime = (seconds) => {
+                const mins = Math.floor(seconds / 60);
+                const secs = seconds % 60;
+                return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+            };
+
+            return (
+                <div className="flex items-center gap-2 bg-slate-800 text-white px-3 py-1.5 rounded-lg border border-slate-700 shadow-inner">
+                    <Timer size={14} className={isRunning ? "text-green-400" : "text-slate-400"} />
+                    <span className="font-mono text-sm font-bold min-w-[3rem] text-center">{formatTime(time)}</span>
+                    <button 
+                        onClick={() => setIsRunning(!isRunning)}
+                        className={`text-xs px-2 py-0.5 rounded ${isRunning ? 'bg-red-500/20 text-red-400' : 'bg-green-500/20 text-green-400'} hover:opacity-80`}
+                    >
+                        {isRunning ? 'STOP' : 'START'}
+                    </button>
+                    <button onClick={() => { setIsRunning(false); setTime(0); }} className="text-xs text-slate-400 hover:text-white">↺</button>
+                </div>
+            );
+        });
+
+        // --- 功能組件: 會議記錄板 (Local Storage) ---
+        const MeetingNotes = ({ projectId }) => {
+            const [notes, setNotes] = useState([]);
+            const [input, setInput] = useState('');
+
+            // Load notes
+            useEffect(() => {
+                if (!projectId) return;
+                const saved = localStorage.getItem(`meeting_notes_${projectId}`);
+                if (saved) {
+                    setNotes(JSON.parse(saved));
+                } else {
+                    setNotes([]);
+                }
+            }, [projectId]);
+
+            // Save notes
+            const saveNotes = (newNotes) => {
+                setNotes(newNotes);
+                localStorage.setItem(`meeting_notes_${projectId}`, JSON.stringify(newNotes));
+            };
+
+            const addNote = () => {
+                if (!input.trim()) return;
+                const newNote = {
+                    id: Date.now(),
+                    text: input,
+                    date: new Date().toISOString(),
+                    done: false
+                };
+                saveNotes([newNote, ...notes]);
+                setInput('');
+            };
+
+            const toggleDone = (id) => {
+                const newNotes = notes.map(n => n.id === id ? { ...n, done: !n.done } : n);
+                saveNotes(newNotes);
+            };
+
+            const deleteNote = (id) => {
+                saveNotes(notes.filter(n => n.id !== id));
+            };
+
+            return (
+                <div className="flex flex-col h-full bg-white">
+                    <div className="p-4 border-b border-slate-100 bg-slate-50">
+                        <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                            <PenTool size={16} className="text-indigo-600"/>
+                            會議記錄 & 待辦
+                        </h3>
+                        <p className="text-xs text-slate-500 mt-1">記錄將自動儲存於此瀏覽器</p>
+                    </div>
+                    
+                    <div className="p-3 border-b border-slate-100">
+                        <div className="flex gap-2">
+                            <input
+                                type="text"
+                                value={input}
+                                onChange={(e) => setInput(e.target.value)}
+                                onKeyPress={(e) => e.key === 'Enter' && addNote()}
+                                placeholder="輸入交辦事項..."
+                                className="flex-1 text-sm px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-500"
+                            />
+                            <button 
+                                onClick={addNote}
+                                className="p-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+                            >
+                                <Plus size={18} />
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto p-2 space-y-2 custom-scrollbar">
+                        {notes.length === 0 ? (
+                            <div className="text-center text-slate-400 py-8 text-sm italic">
+                                尚無記錄
+                            </div>
+                        ) : (
+                            notes.map(note => (
+                                <div key={note.id} className={`group flex items-start gap-2 p-2 rounded-lg hover:bg-slate-50 border border-transparent hover:border-slate-100 transition-all ${note.done ? 'opacity-50' : ''}`}>
+                                    <button 
+                                        onClick={() => toggleDone(note.id)}
+                                        className={`mt-1 w-4 h-4 rounded border flex items-center justify-center ${note.done ? 'bg-green-500 border-green-500 text-white' : 'border-slate-300'}`}
+                                    >
+                                        {note.done && <CheckCircle size={12} />}
+                                    </button>
+                                    <div className="flex-1 min-w-0">
+                                        <p className={`text-sm text-slate-700 break-words ${note.done ? 'line-through' : ''}`}>{note.text}</p>
+                                        <p className="text-[10px] text-slate-400 mt-0.5">
+                                            {new Date(note.date).toLocaleString('zh-TW', { month: 'numeric', day: 'numeric', hour: '2-digit', minute:'2-digit' })}
+                                        </p>
+                                    </div>
+                                    <button 
+                                        onClick={() => deleteNote(note.id)}
+                                        className="text-slate-300 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                                    >
+                                        <Trash2 size={14} />
+                                    </button>
+                                </div>
+                            ))
+                        )}
+                    </div>
+                </div>
+            );
+        };
+
+        // --- 子組件: 頁首 ---
+        const ProjectHeader = memo(({ project, machine, currentSlide, totalProjects, subTitle }) => (
+            <div className="flex items-start justify-between mb-6 shrink-0">
+                <div className="flex-1">
+                    <div className="flex items-center gap-4 mb-3">
+                        <span className="px-3 py-1 bg-indigo-600 text-white text-xs font-bold rounded-full tracking-wider uppercase shadow-sm">
+                            Project {Math.ceil(currentSlide / 2)} / {totalProjects}
+                        </span>
+                        <h2 className="text-4xl font-black text-slate-800 tracking-tight flex items-baseline gap-4">
+                            {machine?.name || project.name}
+                            <span className="text-2xl font-light text-slate-400">| {subTitle}</span>
+                        </h2>
+                    </div>
+                    <div className="flex gap-6 text-sm text-slate-500 font-medium">
+                        <span className="flex items-center gap-1.5 bg-slate-100 px-3 py-1 rounded-full">
+                            <span className="text-indigo-500">📦</span> {machine?.code || 'N/A'}
+                        </span>
+                        <span className="flex items-center gap-1.5 bg-slate-100 px-3 py-1 rounded-full">
+                            <span className="text-indigo-500">👤</span> {project.leader || machine?.members || '未指派'}
+                        </span>
+                        <span className="flex items-center gap-1.5 bg-slate-100 px-3 py-1 rounded-full">
+                            <span className="text-indigo-500">📅</span> 截止: {project.deadline || '未設定'}
+                        </span>
+                    </div>
+                </div>
+                <div className="text-right">
+                    <div className="flex items-end justify-end gap-2 mb-1">
+                        <span className="text-6xl font-black text-indigo-600 leading-none">
+                            {project.progress || 0}
+                        </span>
+                        <span className="text-xl font-bold text-slate-400 mb-2">%</span>
+                    </div>
+                    <div className="w-48 h-3 bg-slate-100 rounded-full overflow-hidden shadow-inner">
+                        <div 
+                            className="h-full bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 transition-all duration-1000 ease-out" 
+                            style={{width: `${project.progress || 0}%`}}
+                        ></div>
+                    </div>
+                </div>
+            </div>
+        ));
+
+        // --- 子組件: 人力資源負載圖 ---
+        const ResourceWorkload = memo(({ tasks }) => {
+            const workload = useMemo(() => {
+                const load = {};
+                // 只計算未完成的任務 (To Do, Doing, Review)
+                const activeTasks = tasks.filter(t => t.status !== 'Done');
+                
+                activeTasks.forEach(t => {
+                    const assignee = t.owner || 'Unassigned';
+                    if (!load[assignee]) {
+                        load[assignee] = { total: 0, doing: 0, todo: 0, review: 0 };
+                    }
+                    load[assignee].total += 1;
+                    if (t.status === 'Doing') load[assignee].doing += 1;
+                    if (t.status === 'To Do') load[assignee].todo += 1;
+                    if (t.status === 'Review') load[assignee].review += 1;
+                });
+
+                // 排序:總量多的在上面
+                return Object.entries(load)
+                    .sort((a, b) => b[1].total - a[1].total)
+                    .slice(0, 5); // 只顯示前 5 名
+            }, [tasks]);
+
+            if (workload.length === 0) {
+                return (
+                    <div className="h-full flex items-center justify-center text-slate-400 text-sm italic">
+                        尚無活躍任務指派
+                    </div>
+                );
+            }
+
+            // 找出最大值以計算比例
+            const maxLoad = Math.max(...workload.map(([_, data]) => data.total));
+
+            return (
+                <div className="flex flex-col h-full overflow-y-auto custom-scrollbar pr-2 space-y-3">
+                    {workload.map(([name, data], idx) => (
+                        <div key={name} className="flex items-center gap-3">
+                            <div className="w-20 text-right">
+                                <div className="text-xs font-bold text-slate-700 truncate" title={name}>{name}</div>
+                            </div>
+                            <div className="flex-1 h-6 bg-slate-100 rounded-full overflow-hidden flex">
+                                {/* Doing */}
+                                <div 
+                                    className="bg-blue-500 h-full" 
+                                    style={{width: `${(data.doing / maxLoad) * 100}%`}}
+                                    title={`Doing: ${data.doing}`}
+                                ></div>
+                                {/* Review */}
+                                <div 
+                                    className="bg-amber-400 h-full" 
+                                    style={{width: `${(data.review / maxLoad) * 100}%`}}
+                                    title={`Review: ${data.review}`}
+                                ></div>
+                                {/* To Do */}
+                                <div 
+                                    className="bg-slate-300 h-full" 
+                                    style={{width: `${(data.todo / maxLoad) * 100}%`}}
+                                    title={`To Do: ${data.todo}`}
+                                ></div>
+                            </div>
+                            <div className="w-8 text-xs font-bold text-slate-500 text-left">
+                                {data.total}
+                            </div>
+                        </div>
+                    ))}
+                    <div className="flex justify-end gap-3 text-[10px] text-slate-400 pt-2 border-t border-slate-100 mt-auto">
+                        <span className="flex items-center gap-1"><div className="w-2 h-2 bg-blue-500 rounded-full"></div>Doing</span>
+                        <span className="flex items-center gap-1"><div className="w-2 h-2 bg-amber-400 rounded-full"></div>Review</span>
+                        <span className="flex items-center gap-1"><div className="w-2 h-2 bg-slate-300 rounded-full"></div>To Do</span>
+                    </div>
+                </div>
+            );
+        });
+
+        // --- 子組件: 甘特圖 (支援詳細模式) ---
+        const GanttChart = memo(({ tasks, fullMode = false }) => {
+            const { dateInfo, sortedTasks } = useMemo(() => {
+                const tasksWithDates = tasks.filter(t => t.startDate && t.endDate);
+                if (tasksWithDates.length === 0) return { dateInfo: null, sortedTasks: [] };
+                
+                const allDates = tasksWithDates.flatMap(t => [new Date(t.startDate), new Date(t.endDate)]);
+                const minDate = new Date(Math.min(...allDates));
+                const maxDate = new Date(Math.max(...allDates));
+                
+                minDate.setDate(minDate.getDate() - 2);
+                maxDate.setDate(maxDate.getDate() + 5);
+
+                const totalDuration = maxDate - minDate;
+                
+                // Full Mode 顯示更多任務
+                const displayTasks = fullMode 
+                    ? tasksWithDates.sort((a, b) => new Date(a.startDate) - new Date(b.startDate))
+                    : tasksWithDates.sort((a, b) => new Date(a.startDate) - new Date(b.startDate)).slice(0, 8);
+
+                return {
+                    dateInfo: { minDate, maxDate, totalDuration },
+                    sortedTasks: displayTasks
+                };
+            }, [tasks, fullMode]);
+
+            // 計算「今天」的偏移量
+            const todayOffset = useMemo(() => {
+                if (!dateInfo) return -1;
+                const today = new Date();
+                const offset = ((today - dateInfo.minDate) / dateInfo.totalDuration) * 100;
+                return offset;
+            }, [dateInfo]);
+
+            const isTodayVisible = todayOffset >= 0 && todayOffset <= 100;
+
+            if (!dateInfo) {
+                return (
+                    <div className="h-full flex flex-col items-center justify-center text-slate-400 bg-slate-50/50 rounded-xl border-2 border-dashed border-slate-200">
+                        <Calendar className="w-8 h-8 mb-2 opacity-50" />
+                        <span className="text-sm">尚無任務時程資料</span>
+                    </div>
+                );
+            }
+
+            const statusStyles = {
+                'To Do': 'bg-slate-400',
+                'Doing': 'bg-blue-500',
+                'Review': 'bg-amber-400',
+                'Done': 'bg-emerald-500'
+            };
+
+            if (fullMode) {
+                return (
+                    <div className="flex h-full border border-slate-200 rounded-xl overflow-hidden bg-white shadow-sm flex-col">
+                         {/* Header */}
+                        <div className="flex border-b border-slate-200 bg-slate-50 text-xs font-bold text-slate-500 uppercase tracking-wider relative z-20">
+                            <div className="w-1/3 p-3 border-r border-slate-200 pl-6">Task Details</div>
+                            <div className="flex-1 p-3 flex justify-between px-6 relative">
+                                <span>{dateInfo.minDate.toLocaleDateString('zh-TW')}</span>
+                                {isTodayVisible && (
+                                    <div className="absolute top-0 bottom-0 flex flex-col items-center z-30" style={{left: `calc(${todayOffset}% + 24px)`, transform: 'translateX(-50%)'}}>
+                                        <div className="bg-red-500 text-white text-[9px] px-1.5 py-0.5 rounded shadow-sm whitespace-nowrap mt-1">
+                                            Today
+                                        </div>
+                                        <div className="w-px h-2 bg-red-500"></div>
+                                    </div>
+                                )}
+                                <span>Timeline ({Math.ceil(dateInfo.totalDuration / (1000 * 60 * 60 * 24))} Days)</span>
+                                <span>{dateInfo.maxDate.toLocaleDateString('zh-TW')}</span>
+                            </div>
+                        </div>
+
+                        {/* Content */}
+                        <div className="flex-1 overflow-y-auto custom-scrollbar relative">
+                            {/* 全域背景格線與今天線 (對齊Bar區域) */}
+                            <div className="absolute inset-0 pointer-events-none z-0">
+                                <div className="flex h-full w-full">
+                                    <div className="w-1/3 border-r border-slate-100 bg-slate-50/30"></div>
+                                    <div className="flex-1 relative mx-6"> {/* mx-6 對應 px-6 padding */}
+                                        {/* Grid Lines */}
+                                        {[0, 25, 50, 75, 100].map(p => (
+                                            <div key={p} className="absolute top-0 bottom-0 border-l border-slate-100 border-dashed" style={{left: `${p}%`}}></div>
+                                        ))}
+                                        {/* Today Line */}
+                                        {isTodayVisible && (
+                                            <div className="absolute top-0 bottom-0 border-l-2 border-red-500/60 border-dashed z-10" style={{left: `${todayOffset}%`}}></div>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+
+                            {sortedTasks.map((task, idx) => {
+                                const start = new Date(task.startDate);
+                                const end = new Date(task.endDate);
+                                const offset = ((start - dateInfo.minDate) / dateInfo.totalDuration) * 100;
+                                const width = ((end - start) / dateInfo.totalDuration) * 100;
+                                const isEven = idx % 2 === 0;
+
+                                return (
+                                    <div key={task.id} className={`relative z-10 flex h-12 border-b border-slate-100 hover:bg-indigo-50/20 transition-colors ${isEven ? 'bg-white/50' : 'bg-slate-50/30'}`}>
+                                        {/* Left: Info */}
+                                        <div className="w-1/3 flex items-center px-6 border-r border-slate-100/0">
+                                            <div className={`w-2.5 h-2.5 rounded-full mr-3 ${statusStyles[task.status] || 'bg-slate-300'}`}></div>
+                                            <div className="flex-1 min-w-0 mr-4">
+                                                <div className="text-sm font-semibold text-slate-700 truncate" title={task.title}>{task.title || task.name}</div>
+                                                <div className="text-[10px] text-slate-400 flex items-center gap-2">
+                                                    <span className="truncate">{task.status}</span>
+                                                    {task.risk && <span className="text-red-500 flex items-center gap-1"><AlertTriangle size={10}/> Risk</span>}
+                                                </div>
+                                            </div>
+                                            <div className="flex flex-col items-end min-w-[80px]">
+                                                <div className="flex items-center gap-1 text-xs font-medium text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full">
+                                                    <User size={10} /> {task.owner || 'Unassigned'}
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Right: Bar */}
+                                        <div className="flex-1 relative flex items-center px-6">
+                                            {/* Note: Grid lines are now in the background container */}
+                                            <div className="w-full h-5 bg-slate-100 rounded-full overflow-hidden relative shadow-inner">
+                                                <div 
+                                                    className={`absolute h-full rounded-full ${statusStyles[task.status] || 'bg-slate-300'} shadow-sm flex items-center px-2`}
+                                                    style={{ 
+                                                        left: `${Math.max(0, offset)}%`, 
+                                                        width: `${Math.max(width, 1)}%`,
+                                                        minWidth: '20px'
+                                                    }}
+                                                >
+                                                    {width > 10 && (
+                                                        <span className="text-[9px] text-white font-bold whitespace-nowrap drop-shadow-md">
+                                                            {start.getMonth()+1}/{start.getDate()} - {end.getMonth()+1}/{end.getDate()}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                );
+            }
+
+            // Compact Mode (Original)
+            return (
+                <div className="flex flex-col h-full overflow-hidden">
+                    <div className="flex justify-between text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 px-1 border-b border-slate-100 pb-1">
+                        <span>{dateInfo.minDate.toLocaleDateString('zh-TW')}</span>
+                        <span>Total: {Math.ceil(dateInfo.totalDuration / (1000 * 60 * 60 * 24))} Days</span>
+                        <span>{dateInfo.maxDate.toLocaleDateString('zh-TW')}</span>
+                    </div>
+                    
+                    <div className="flex-1 overflow-y-auto pr-2 space-y-3 custom-scrollbar">
+                        {sortedTasks.map((task) => {
+                            const start = new Date(task.startDate);
+                            const end = new Date(task.endDate);
+                            const offset = ((start - dateInfo.minDate) / dateInfo.totalDuration) * 100;
+                            const width = ((end - start) / dateInfo.totalDuration) * 100;
+
+                            return (
+                                <div key={task.id} className="relative group">
+                                    <div className="flex justify-between items-baseline mb-1">
+                                        <div className="text-xs font-semibold text-slate-700 truncate w-32" title={task.title || task.name}>
+                                            {task.title || task.name}
+                                        </div>
+                                        <div className="text-[10px] text-slate-400">
+                                            {task.owner}
+                                        </div>
+                                    </div>
+                                    <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden relative">
+                                        <div 
+                                            className={`absolute h-full rounded-full ${statusStyles[task.status] || 'bg-slate-300'} shadow-sm transition-all duration-500`}
+                                            style={{ 
+                                                left: `${Math.max(0, offset)}%`, 
+                                                width: `${Math.max(width, 2)}%`
+                                            }}
+                                        />
+                                        {/* Today Marker for Compact Mode */}
+                                        {isTodayVisible && (
+                                            <div 
+                                                className="absolute top-0 bottom-0 border-l-2 border-red-500 z-10 h-full" 
+                                                style={{left: `${todayOffset}%`}} 
+                                                title="Today"
+                                            ></div>
+                                        )}
+                                    </div>
+                                    <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-[10px] py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10 pointer-events-none">
+                                        {start.toLocaleDateString()} - {end.toLocaleDateString()} ({task.status})
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            );
+        });
+
+        // --- 子組件: 統計卡片 ---
+        const TaskStats = memo(({ tasks }) => {
+            const stats = useMemo(() => ({
+                todo: tasks.filter(t => t.status === 'To Do').length,
+                doing: tasks.filter(t => t.status === 'Doing').length,
+                review: tasks.filter(t => t.status === 'Review').length,
+                done: tasks.filter(t => t.status === 'Done').length,
+                risk: tasks.filter(t => t.risk).length
+            }), [tasks]);
+
+            return (
+                <div className="grid grid-cols-4 gap-4 h-full">
+                    {[
+                        { label: '待處理', count: stats.todo, color: 'text-slate-500', bg: 'bg-slate-50' },
+                        { label: '進行中', count: stats.doing, color: 'text-blue-600', bg: 'bg-blue-50' },
+                        { label: '審核中', count: stats.review, color: 'text-amber-600', bg: 'bg-amber-50' },
+                        { label: '已完成', count: stats.done, color: 'text-emerald-600', bg: 'bg-emerald-50' },
+                    ].map((item, idx) => (
+                        <div key={idx} className={`${item.bg} rounded-xl flex flex-col items-center justify-center p-2 border border-slate-100 shadow-sm`}>
+                            <span className={`text-3xl font-black ${item.color} mb-1`}>{item.count}</span>
+                            <span className="text-xs font-medium text-slate-500">{item.label}</span>
+                        </div>
+                    ))}
+                    {stats.risk > 0 && (
+                        <div className="col-span-4 mt-auto flex items-center justify-center gap-2 bg-red-50 text-red-600 py-2 rounded-lg text-sm font-bold border border-red-100 animate-pulse">
+                            <AlertTriangle size={16} />
+                            <span>{stats.risk} 個風險任務需關注</span>
+                        </div>
+                    )}
+                </div>
+            );
+        });
+
+        // --- 主組件 1: 專案總覽頁 (Overview) ---
+        const ProjectOverviewSlide = ({ project, currentSlide, totalProjects, machines, tasks, messages, toggleNotes }) => {
+            const machine = useMemo(() => machines.find(m => m.id === project.machineId), [machines, project.machineId]);
+            const projectMessages = useMemo(() => messages.filter(msg => msg.projectId === project.id).slice(-6).reverse(), [messages, project.id]);
+            const projectTasks = useMemo(() => tasks.filter(t => t.projectId === project.id), [tasks, project.id]);
+
+            return (
+                <div className="h-full flex flex-col p-10 bg-gradient-to-br from-slate-50 to-indigo-50/30 fade-enter-active">
+                    <ProjectHeader 
+                        project={project} 
+                        machine={machine} 
+                        currentSlide={currentSlide} 
+                        totalProjects={totalProjects} 
+                        subTitle="Project Overview"
+                    />
+                    
+                    <div className="grid grid-cols-12 gap-6 flex-1 min-h-0 relative">
+                        {/* 左欄:設計規格 + 人力負載 (各佔 60% / 40%) */}
+                        <div className="col-span-7 flex flex-col gap-6">
+                            {/* 設計規格 (Flex: 3) */}
+                            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col flex-[3] min-h-0">
+                                <h3 className="text-xl font-bold text-slate-800 mb-4 flex items-center gap-3">
+                                    <div className="p-2 bg-blue-100 rounded-xl"><FileText size={20} className="text-blue-600"/></div>
+                                    設計規格與備註
+                                </h3>
+                                <div className="text-slate-600 text-base leading-relaxed overflow-y-auto flex-1 pr-2 custom-scrollbar whitespace-pre-line bg-slate-50 p-4 rounded-xl border border-slate-100">
+                                    {project.specs || machine?.description || '尚未填寫規格說明...'}
+                                </div>
+                            </div>
+
+                             {/* 人力負載分析 (Flex: 2) - 新增區塊 */}
+                            <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex flex-col flex-[2] min-h-0">
+                                <h3 className="text-lg font-bold text-slate-800 mb-3 flex items-center gap-2">
+                                    <div className="p-1.5 bg-orange-100 rounded-lg"><BarChart2 size={18} className="text-orange-600"/></div>
+                                    人力資源負載 (Workload)
+                                </h3>
+                                <div className="flex-1 min-h-0">
+                                    <ResourceWorkload tasks={projectTasks} />
+                                </div>
+                            </div>
+                        </div>
+                        
+                        {/* 右欄:統計與討論 */}
+                        <div className="col-span-5 flex flex-col gap-6">
+                            {/* Stats */}
+                            <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 h-1/3">
+                                <h3 className="text-lg font-bold text-slate-800 mb-3 flex items-center gap-2">
+                                    <div className="p-1.5 bg-green-100 rounded-lg"><ListTodo size={18} className="text-green-600"/></div>
+                                    任務狀態分佈
+                                </h3>
+                                <TaskStats tasks={projectTasks} />
+                            </div>
+                            
+                            {/* Chat */}
+                            <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex flex-col flex-1 min-h-0">
+                                <h3 className="text-lg font-bold text-slate-800 mb-3 flex items-center gap-2 justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <div className="p-1.5 bg-purple-100 rounded-lg"><MessageSquare size={18} className="text-purple-600"/></div>
+                                        近期討論 ({projectMessages.length})
+                                    </div>
+                                    <button onClick={toggleNotes} className="text-xs text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 px-2 py-1 rounded transition-colors flex items-center gap-1">
+                                        <PenTool size={12}/> 寫筆記
+                                    </button>
+                                </h3>
+                                <div className="space-y-3 overflow-y-auto flex-1 pr-2 custom-scrollbar">
+                                    {projectMessages.length > 0 ? projectMessages.map((msg, idx) => (
+                                        <div key={idx} className="bg-slate-50 p-3 rounded-xl border border-slate-100 hover:bg-slate-100 transition-colors">
+                                            <div className="flex justify-between items-start mb-1.5">
+                                                <div className="flex items-center gap-2">
+                                                    <div className="w-6 h-6 rounded-full bg-indigo-100 flex items-center justify-center text-[10px] font-bold text-indigo-600">
+                                                        {msg.user?.[0] || 'U'}
+                                                    </div>
+                                                    <span className="font-bold text-slate-700 text-sm">{msg.user}</span>
+                                                </div>
+                                                <span className="text-[10px] text-slate-400 font-medium">
+                                                    {msg.timestamp ? new Date(msg.timestamp).toLocaleDateString() : ''}
+                                                </span>
+                                            </div>
+                                            <p className="text-xs text-slate-600 leading-normal">{msg.content || msg.message}</p>
+                                        </div>
+                                    )) : (
+                                        <div className="h-full flex flex-col items-center justify-center text-slate-400">
+                                            <span className="text-sm">暫無討論記錄</span>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // --- 主組件 2: 專案時程頁 (Full Gantt) ---
+        const ProjectGanttSlide = ({ project, currentSlide, totalProjects, machines, tasks }) => {
+            const machine = useMemo(() => machines.find(m => m.id === project.machineId), [machines, project.machineId]);
+            const projectTasks = useMemo(() => tasks.filter(t => t.projectId === project.id), [tasks, project.id]);
+
+            return (
+                <div className="h-full flex flex-col p-10 bg-white fade-enter-active">
+                    <ProjectHeader 
+                        project={project} 
+                        machine={machine} 
+                        currentSlide={currentSlide} 
+                        totalProjects={totalProjects} 
+                        subTitle="Detailed Schedule"
+                    />
+                    
+                    <div className="flex-1 min-h-0 flex flex-col">
+                        <div className="flex items-center justify-between mb-4 px-1">
+                            <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+                                <div className="p-2 bg-indigo-100 rounded-lg"><Target size={20} className="text-indigo-600"/></div>
+                                完整專案時程表 ({projectTasks.length} Tasks)
+                            </h3>
+                            <div className="flex gap-4 text-sm text-slate-500">
+                                <span className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-slate-400"></div> To Do</span>
+                                <span className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-blue-500"></div> Doing</span>
+                                <span className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-amber-400"></div> Review</span>
+                                <span className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-emerald-500"></div> Done</span>
+                            </div>
+                        </div>
+                        <div className="flex-1 min-h-0">
+                            <GanttChart tasks={projectTasks} fullMode={true} />
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // --- 主程式 ---
+        const ProjectReportPresentation = () => {
+            const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
+            const [projects, setProjects] = useState([]);
+            const [machines, setMachines] = useState([]);
+            const [tasks, setTasks] = useState([]);
+            const [messages, setMessages] = useState([]);
+            const [loading, setLoading] = useState(true);
+
+            // 簡報工具狀態
+            const [isFocusMode, setIsFocusMode] = useState(false);
+            const [showNotes, setShowNotes] = useState(false);
+            const [laserMode, setLaserMode] = useState(false);
+            
+            // 雷射筆邏輯
+            useEffect(() => {
+                if (!laserMode) return;
+                const dot = document.createElement('div');
+                dot.id = 'laser-dot';
+                document.body.appendChild(dot);
+                document.body.classList.add('cursor-laser');
+                const moveLaser = (e) => {
+                    dot.style.left = `${e.clientX - 10}px`;
+                    dot.style.top = `${e.clientY - 10}px`;
+                };
+                window.addEventListener('mousemove', moveLaser);
+                return () => {
+                    window.removeEventListener('mousemove', moveLaser);
+                    document.body.removeChild(dot);
+                    document.body.classList.remove('cursor-laser');
+                };
+            }, [laserMode]);
+
+            useEffect(() => {
+                let unsubscribeFuncs = [];
+                const collections = ['rd_projects', 'rd_machines', 'rd_tasks', 'rd_messages'];
+                const setters = [setProjects, setMachines, setTasks, setMessages];
+
+                collections.forEach((colName, index) => {
+                    const unsub = window.firebase.onSnapshot(
+                        window.firebase.collection(db, colName),
+                        (snapshot) => {
+                            const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                            setters[index](data);
+                            if (index === 1) setLoading(false);
+                        },
+                        (error) => console.error(`Error fetching ${colName}:`, error)
+                    );
+                    unsubscribeFuncs.push(unsub);
+                });
+
+                return () => unsubscribeFuncs.forEach(fn => fn());
+            }, []);
+
+            const activeProjects = useMemo(() => {
+                return projects.filter(p => {
+                    if (!p.machineId) return false;
+                    const machine = machines.find(m => m.id === p.machineId);
+                    return machine && machine.status === 'Active' && p.progress < 100;
+                });
+            }, [projects, machines]);
+
+            // 計算總頁數: 1 (Cover) + 1 (Resource Overview) + Projects * 2 (Overview + Gantt)
+            const totalSlides = 2 + (activeProjects.length * 2);
+
+            // PPT 生成功能
+            const generatePPT = async () => {
+                const pptx = new PptxGenJS();
+                pptx.layout = 'LAYOUT_16x9';
+                pptx.author = 'R&D Nexus System';
+                pptx.company = 'TQM';
+                pptx.title = 'R&D 專案會報簡報';
+                pptx.subject = '研發專案執行進度與團隊工作分析';
+
+                // 封面頁 - 精美設計
+                const coverSlide = pptx.addSlide();
+                
+                // 漸層背景
+                coverSlide.background = { color: '0F172A' };
+                
+                // 裝飾圓形背景
+                coverSlide.addShape(pptx.ShapeType.ellipse, {
+                    x: 7.5, y: -0.5, w: 3, h: 3,
+                    fill: { color: '4F46E5', transparency: 85 }
+                });
+                coverSlide.addShape(pptx.ShapeType.ellipse, {
+                    x: -0.5, y: 4.5, w: 2.5, h: 2.5,
+                    fill: { color: '7C3AED', transparency: 85 }
+                });
+                
+                // 狀態指示器
+                coverSlide.addShape(pptx.ShapeType.rect, {
+                    x: 0.5, y: 0.5, w: 1.5, h: 0.28,
+                    fill: { color: 'FFFFFF', transparency: 90 },
+                    line: { color: '4ADE80', width: 1 }
+                });
+                coverSlide.addShape(pptx.ShapeType.ellipse, {
+                    x: 0.6, y: 0.6, w: 0.08, h: 0.08,
+                    fill: { color: '4ADE80' }
+                });
+                coverSlide.addText('LIVE SESSION', {
+                    x: 0.75, y: 0.55, w: 1.1, h: 0.18,
+                    fontSize: 8, bold: true, color: '4ADE80',
+                    align: 'left'
+                });
+                
+                // 主標題
+                coverSlide.addText('R&D Project', {
+                    x: 0.5, y: 1.5, w: 7, h: 0.55,
+                    fontSize: 54, bold: true, color: 'FFFFFF',
+                    align: 'left', fontFace: 'Arial'
+                });
+                coverSlide.addText('Review', {
+                    x: 0.5, y: 2.05, w: 7, h: 0.55,
+                    fontSize: 54, bold: true, color: 'FFFFFF',
+                    align: 'left', fontFace: 'Arial'
+                });
+                
+                // 副標題帶底色
+                coverSlide.addShape(pptx.ShapeType.rect, {
+                    x: 0.5, y: 2.8, w: 4.5, h: 0.4,
+                    fill: { color: '4F46E5', transparency: 20 }
+                });
+                coverSlide.addText('研發專案執行進度與團隊工作分析', {
+                    x: 0.65, y: 2.85, w: 4.2, h: 0.3,
+                    fontSize: 14, color: 'E0E7FF',
+                    align: 'left'
+                });
+                
+                // 統計卡片 - 精美設計
+                const stats = [
+                    { label: 'Active Projects', sub: '進行中專案', val: activeProjects.length, color: '6366F1', icon: '🚀' },
+                    { label: 'Pending Tasks', sub: '執行中任務', val: tasks.filter(t => t.status === 'Doing').length, color: '3B82F6', icon: '⚡' },
+                    { label: 'Risk Items', sub: '風險項目', val: tasks.filter(t => t.risk).length, color: 'EF4444', icon: '🔥' },
+                    { label: 'Avg Progress', sub: '平均進度', val: Math.round(activeProjects.reduce((sum, p) => sum + (p.progress || 0), 0) / activeProjects.length || 0) + '%', color: '10B981', icon: '📈' }
+                ];
+                
+                stats.forEach((stat, idx) => {
+                    const x = 0.5 + (idx * 2.35);
+                    
+                    // 卡片背景
+                    coverSlide.addShape(pptx.ShapeType.rect, {
+                        x: x, y: 3.6, w: 2.2, h: 1.3,
+                        fill: { color: 'FFFFFF', transparency: 5 },
+                        line: { color: 'FFFFFF', width: 0.5, transparency: 80 }
+                    });
+                    
+                    // 圖標
+                    coverSlide.addText(stat.icon, {
+                        x: x + 0.1, y: 3.7, w: 0.3, h: 0.3,
+                        fontSize: 16
+                    });
+                    
+                    // 數值
+                    coverSlide.addText(stat.val.toString(), {
+                        x: x, y: 3.95, w: 2.2, h: 0.5,
+                        fontSize: 36, bold: true, color: stat.color,
+                        align: 'center'
+                    });
+                    
+                    // 標籤
+                    coverSlide.addText(stat.label, {
+                        x: x, y: 4.5, w: 2.2, h: 0.22,
+                        fontSize: 10, bold: true, color: 'CBD5E1',
+                        align: 'center'
+                    });
+                    
+                    // 副標籤
+                    coverSlide.addText(stat.sub, {
+                        x: x, y: 4.7, w: 2.2, h: 0.18,
+                        fontSize: 7, color: '64748B',
+                        align: 'center'
+                    });
+                });
+
+                // 頁腳資訊
+                coverSlide.addText(`Generated: ${new Date().toLocaleDateString('zh-TW')} | R&D Nexus System`, {
+                    x: 0.5, y: 5.2, w: 9, h: 0.25,
+                    fontSize: 8, color: '64748B',
+                    align: 'left'
+                });
+
+                // ===== 第二頁：人力資源總覽 =====
+                const resourceSlide = pptx.addSlide();
+                
+                // 背景
+                resourceSlide.background = { color: 'FEF3F2' };
+                
+                // 頂部色帶
+                resourceSlide.addShape(pptx.ShapeType.rect, {
+                    x: 0, y: 0, w: 10, h: 0.05,
+                    fill: { type: 'solid', color: 'F97316' },
+                    line: { type: 'none' }
+                });
+                
+                // 標題
+                resourceSlide.addText('整體人力資源分析', {
+                    x: 0.5, y: 0.3, w: 6, h: 0.5,
+                    fontSize: 28, bold: true, color: '1E293B'
+                });
+                resourceSlide.addText('跨專案人員工作負載與任務分佈總覽', {
+                    x: 0.5, y: 0.75, w: 6, h: 0.3,
+                    fontSize: 12, color: '64748B'
+                });
+                
+                // 計算全局人力負載
+                const allActiveTasks = tasks.filter(t => {
+                    const project = projects.find(p => p.id === t.projectId);
+                    if (!project || !project.machineId) return false;
+                    const machine = machines.find(m => m.id === project.machineId);
+                    return machine && machine.status === 'Active' && project.progress < 100;
+                });
+
+                const globalWorkload = {};
+                allActiveTasks.forEach(t => {
+                    const owner = t.owner || 'Unassigned';
+                    if (!globalWorkload[owner]) {
+                        globalWorkload[owner] = { total: 0, doing: 0, todo: 0, review: 0, projects: new Set() };
+                    }
+                    globalWorkload[owner].total += 1;
+                    if (t.status === 'Doing') globalWorkload[owner].doing += 1;
+                    if (t.status === 'To Do') globalWorkload[owner].todo += 1;
+                    if (t.status === 'Review') globalWorkload[owner].review += 1;
+                    
+                    const project = projects.find(p => p.id === t.projectId);
+                    if (project) globalWorkload[owner].projects.add(project.id);
+                });
+
+                const topWorkers = Object.entries(globalWorkload)
+                    .map(([name, data]) => ({ name, ...data, projectCount: data.projects.size }))
+                    .sort((a, b) => b.total - a.total)
+                    .slice(0, 10);
+
+                const maxLoad = Math.max(...topWorkers.map(w => w.total), 1);
+
+                // 統計卡片
+                const resourceStats = [
+                    { label: '總專案數', value: activeProjects.length, color: '6366F1' },
+                    { label: '總任務數', value: allActiveTasks.length, color: '3B82F6' },
+                    { label: '參與人員', value: Object.keys(globalWorkload).length, color: '8B5CF6' },
+                    { label: '平均負載', value: Math.round(allActiveTasks.length / Math.max(Object.keys(globalWorkload).length, 1)), color: 'F97316' }
+                ];
+                
+                resourceStats.forEach((stat, idx) => {
+                    const x = 6.5 + (idx % 2) * 1.8;
+                    const y = 1.3 + Math.floor(idx / 2) * 1.05;
+                    
+                    resourceSlide.addShape(pptx.ShapeType.rect, {
+                        x: x, y: y, w: 1.6, h: 0.9,
+                        fill: { color: 'FFFFFF' },
+                        line: { color: stat.color, width: 1.5 }
+                    });
+                    
+                    resourceSlide.addText(stat.value.toString(), {
+                        x: x, y: y + 0.15, w: 1.6, h: 0.4,
+                        fontSize: 24, bold: true, color: stat.color, align: 'center'
+                    });
+                    
+                    resourceSlide.addText(stat.label, {
+                        x: x, y: y + 0.55, w: 1.6, h: 0.25,
+                        fontSize: 9, color: '64748B', align: 'center'
+                    });
+                });
+
+                // 人力負載排行表
+                resourceSlide.addText('人員工作負載排行 TOP 10', {
+                    x: 0.5, y: 1.3, w: 5.5, h: 0.35,
+                    fontSize: 14, bold: true, color: '1E293B'
+                });
+
+                // 表格標題行
+                const tableHeaderY = 1.75;
+                ['排名', '姓名', '專案數', 'Doing', 'Review', 'To Do', '合計'].forEach((header, idx) => {
+                    const widths = [0.5, 1.2, 0.7, 0.7, 0.7, 0.7, 0.7];
+                    const x = 0.5 + widths.slice(0, idx).reduce((a, b) => a + b, 0);
+                    
+                    resourceSlide.addShape(pptx.ShapeType.rect, {
+                        x: x, y: tableHeaderY, w: widths[idx], h: 0.35,
+                        fill: { color: 'F97316' }
+                    });
+                    
+                    resourceSlide.addText(header, {
+                        x: x, y: tableHeaderY, w: widths[idx], h: 0.35,
+                        fontSize: 9, bold: true, color: 'FFFFFF', align: 'center', valign: 'middle'
+                    });
+                });
+
+                // 表格數據行
+                topWorkers.forEach((worker, idx) => {
+                    const y = tableHeaderY + 0.35 + (idx * 0.32);
+                    const rowColor = idx % 2 === 0 ? 'FFF7ED' : 'FFFFFF';
+                    
+                    // 背景
+                    resourceSlide.addShape(pptx.ShapeType.rect, {
+                        x: 0.5, y: y, w: 5.2, h: 0.32,
+                        fill: { color: rowColor },
+                        line: { color: 'FED7AA', width: 0.5 }
+                    });
+                    
+                    // 排名
+                    resourceSlide.addText((idx + 1).toString(), {
+                        x: 0.5, y: y, w: 0.5, h: 0.32,
+                        fontSize: 9, bold: true, color: 'EA580C', align: 'center', valign: 'middle'
+                    });
+                    
+                    // 姓名
+                    resourceSlide.addText(worker.name, {
+                        x: 1.0, y: y, w: 1.2, h: 0.32,
+                        fontSize: 9, color: '1E293B', align: 'left', valign: 'middle'
+                    });
+                    
+                    // 專案數
+                    resourceSlide.addText(worker.projectCount.toString(), {
+                        x: 2.2, y: y, w: 0.7, h: 0.32,
+                        fontSize: 9, color: '64748B', align: 'center', valign: 'middle'
+                    });
+                    
+                    // Doing
+                    resourceSlide.addText(worker.doing.toString(), {
+                        x: 2.9, y: y, w: 0.7, h: 0.32,
+                        fontSize: 9, color: '3B82F6', align: 'center', valign: 'middle', bold: worker.doing > 0
+                    });
+                    
+                    // Review
+                    resourceSlide.addText(worker.review.toString(), {
+                        x: 3.6, y: y, w: 0.7, h: 0.32,
+                        fontSize: 9, color: 'F59E0B', align: 'center', valign: 'middle', bold: worker.review > 0
+                    });
+                    
+                    // To Do
+                    resourceSlide.addText(worker.todo.toString(), {
+                        x: 4.3, y: y, w: 0.7, h: 0.32,
+                        fontSize: 9, color: '94A3B8', align: 'center', valign: 'middle'
+                    });
+                    
+                    // 合計
+                    resourceSlide.addText(worker.total.toString(), {
+                        x: 5.0, y: y, w: 0.7, h: 0.32,
+                        fontSize: 10, bold: true, color: 'EA580C', align: 'center', valign: 'middle'
+                    });
+                });
+
+                // 專案任務分佈
+                resourceSlide.addText('專案任務數排行 TOP 8', {
+                    x: 6.5, y: 3.5, w: 3, h: 0.35,
+                    fontSize: 12, bold: true, color: '1E293B'
+                });
+
+                const projectStats = activeProjects.map(p => {
+                    const machine = machines.find(m => m.id === p.machineId);
+                    const projectTasks = tasks.filter(t => t.projectId === p.id);
+                    return {
+                        name: (machine?.name || p.name).substring(0, 15),
+                        taskCount: projectTasks.length,
+                        progress: p.progress || 0
+                    };
+                }).sort((a, b) => b.taskCount - a.taskCount).slice(0, 8);
+
+                projectStats.forEach((proj, idx) => {
+                    const y = 3.95 + (idx * 0.18);
+                    
+                    resourceSlide.addText(proj.name, {
+                        x: 6.5, y: y, w: 1.8, h: 0.16,
+                        fontSize: 8, color: '1E293B'
+                    });
+                    
+                    resourceSlide.addText(proj.taskCount.toString(), {
+                        x: 9.2, y: y, w: 0.3, h: 0.16,
+                        fontSize: 8, bold: true, color: '8B5CF6', align: 'right'
+                    });
+                    
+                    // 進度條
+                    resourceSlide.addShape(pptx.ShapeType.rect, {
+                        x: 8.3, y: y + 0.02, w: 0.85, h: 0.12,
+                        fill: { color: 'E2E8F0' }
+                    });
+                    
+                    resourceSlide.addShape(pptx.ShapeType.rect, {
+                        x: 8.3, y: y + 0.02, w: 0.85 * (proj.progress / 100), h: 0.12,
+                        fill: { color: '8B5CF6' }
+                    });
+                });
+
+                // 頁腳
+                resourceSlide.addText('Page 2 | Resource Overview', {
+                    x: 0.5, y: 5.2, w: 9, h: 0.2,
+                    fontSize: 8, color: '94A3B8', align: 'center'
+                });
+
+                // 專案投影片
+                activeProjects.forEach((project, idx) => {
+                    const machine = machines.find(m => m.id === project.machineId);
+                    const projectTasks = tasks.filter(t => t.projectId === project.id);
+                    const projectMessages = messages.filter(msg => msg.projectId === project.id).slice(-3);
+
+                    // ========== Overview 頁 - 精美版 ==========
+                    const overviewSlide = pptx.addSlide();
+                    overviewSlide.background = { color: 'F8FAFC' };
+                    
+                    // 頂部色帶
+                    overviewSlide.addShape(pptx.ShapeType.rect, {
+                        x: 0, y: 0, w: 10, h: 0.05,
+                        fill: { color: '4F46E5' }
+                    });
+                    
+                    // 專案編號標籤 - 圓角矩形
+                    overviewSlide.addShape(pptx.ShapeType.rect, {
+                        x: 0.3, y: 0.25, w: 1.5, h: 0.35,
+                        fill: { color: '4F46E5' }
+                    });
+                    overviewSlide.addText(`Project ${idx + 1} / ${activeProjects.length}`, {
+                        x: 0.3, y: 0.28, w: 1.5, h: 0.3,
+                        fontSize: 11, bold: true, color: 'FFFFFF',
+                        align: 'center'
+                    });
+                    
+                    // 專案名稱 - 大標題
+                    overviewSlide.addText(machine?.name || project.name, {
+                        x: 0.3, y: 0.7, w: 6.5, h: 0.5,
+                        fontSize: 28, bold: true, color: '1E293B'
+                    });
+                    
+                    // 子標題
+                    overviewSlide.addText('Project Overview | 專案總覽', {
+                        x: 0.3, y: 1.15, w: 6.5, h: 0.25,
+                        fontSize: 11, color: '64748B', italic: true
+                    });
+                    
+                    // 進度圓圈 - 右上角
+                    overviewSlide.addShape(pptx.ShapeType.ellipse, {
+                        x: 8.5, y: 0.4, w: 1.2, h: 1.2,
+                        fill: { color: 'EEF2FF' },
+                        line: { color: '4F46E5', width: 2.5 }
+                    });
+                    overviewSlide.addText(`${project.progress || 0}%`, {
+                        x: 8.5, y: 0.7, w: 1.2, h: 0.6,
+                        fontSize: 26, bold: true, color: '4F46E5',
+                        align: 'center', valign: 'middle'
+                    });
+                    
+                    // 專案資訊卡片
+                    const infoBg = {
+                        x: 0.3, y: 1.5, w: 9.4, h: 0.38,
+                        fill: { color: 'FFFFFF' },
+                        line: { color: 'E2E8F0', width: 1 }
+                    };
+                    overviewSlide.addShape(pptx.ShapeType.rect, infoBg);
+                    
+                    const info = [
+                        { icon: '📦', label: '專案代碼', val: machine?.code || 'N/A', x: 0.5 },
+                        { icon: '👤', label: '負責人', val: project.leader || machine?.members || '未指派', x: 3.5 },
+                        { icon: '📅', label: '截止日期', val: project.deadline || '未設定', x: 6.5 }
+                    ];
+                    
+                    info.forEach(item => {
+                        overviewSlide.addText(item.icon, {
+                            x: item.x, y: 1.56, w: 0.25, h: 0.25,
+                            fontSize: 12
+                        });
+                        overviewSlide.addText(`${item.label}: ${item.val}`, {
+                            x: item.x + 0.3, y: 1.59, w: 2.5, h: 0.22,
+                            fontSize: 9, color: '475569'
+                        });
+                    });
+
+                    // ========== 左側區域 ==========
+                    // 設計規格卡片
+                    overviewSlide.addShape(pptx.ShapeType.rect, {
+                        x: 0.3, y: 2.0, w: 5.2, h: 2.2,
+                        fill: { color: 'FFFFFF' },
+                        line: { color: 'E2E8F0', width: 1 }
+                    });
+                    
+                    // 標題帶色塊
+                    overviewSlide.addShape(pptx.ShapeType.rect, {
+                        x: 0.3, y: 2.0, w: 5.2, h: 0.35,
+                        fill: { color: '3B82F6' }
+                    });
+                    overviewSlide.addText('📝 設計規格與備註', {
+                        x: 0.45, y: 2.05, w: 5, h: 0.25,
+                        fontSize: 12, bold: true, color: 'FFFFFF'
+                    });
+                    
+                    // 規格內容
+                    const specs = project.specs || machine?.description || '尚未填寫規格說明...';
+                    overviewSlide.addText(specs, {
+                        x: 0.45, y: 2.45, w: 4.9, h: 1.65,
+                        fontSize: 9, color: '334155',
+                        valign: 'top',
+                        breakLine: true
+                    });
+
+                    // 人力負載分析
+                    overviewSlide.addShape(pptx.ShapeType.rect, {
+                        x: 0.3, y: 4.35, w: 5.2, h: 1.15,
+                        fill: { color: 'FFFFFF' },
+                        line: { color: 'E2E8F0', width: 1 }
+                    });
+                    
+                    overviewSlide.addShape(pptx.ShapeType.rect, {
+                        x: 0.3, y: 4.35, w: 5.2, h: 0.35,
+                        fill: { color: 'F97316' }
+                    });
+                    overviewSlide.addText('📊 人力資源負載', {
+                        x: 0.45, y: 4.4, w: 5, h: 0.25,
+                        fontSize: 12, bold: true, color: 'FFFFFF'
+                    });
+                    
+                    // 計算人力負載
+                    const workload = {};
+                    const activeTasks = projectTasks.filter(t => t.status !== 'Done');
+                    activeTasks.forEach(t => {
+                        const assignee = t.owner || 'Unassigned';
+                        if (!workload[assignee]) workload[assignee] = 0;
+                        workload[assignee] += 1;
+                    });
+                    
+                    const topWorkers = Object.entries(workload)
+                        .sort((a, b) => b[1] - a[1])
+                        .slice(0, 4);
+                    
+                    if (topWorkers.length > 0) {
+                        const maxLoad = Math.max(...topWorkers.map(([_, count]) => count));
+                        topWorkers.forEach(([name, count], i) => {
+                            const yPos = 4.8 + (i * 0.18);
+                            const barWidth = (count / maxLoad) * 3.0;
+                            
+                            overviewSlide.addText(name, {
+                                x: 0.45, y: yPos, w: 1.1, h: 0.15,
+                                fontSize: 8, color: '1E293B'
+                            });
+                            
+                            overviewSlide.addShape(pptx.ShapeType.rect, {
+                                x: 1.65, y: yPos, w: barWidth, h: 0.15,
+                                fill: { color: '3B82F6' }
+                            });
+                            
+                            overviewSlide.addText(count.toString(), {
+                                x: 1.65 + barWidth + 0.05, y: yPos, w: 0.25, h: 0.15,
+                                fontSize: 8, bold: true, color: '1E293B'
+                            });
+                        });
+                    } else {
+                        overviewSlide.addText('尚無活躍任務指派', {
+                            x: 0.45, y: 4.85, w: 4.9, h: 0.5,
+                            fontSize: 9, color: '94A3B8', italic: true,
+                            align: 'center', valign: 'middle'
+                        });
+                    }
+
+                    // ========== 右側區域 ==========
+                    // 任務統計卡片
+                    overviewSlide.addShape(pptx.ShapeType.rect, {
+                        x: 5.7, y: 2.0, w: 4, h: 1.25,
+                        fill: { color: 'FFFFFF' },
+                        line: { color: 'E2E8F0', width: 1 }
+                    });
+                    
+                    overviewSlide.addShape(pptx.ShapeType.rect, {
+                        x: 5.7, y: 2.0, w: 4, h: 0.35,
+                        fill: { color: '10B981' }
+                    });
+                    overviewSlide.addText('📋 任務狀態分佈', {
+                        x: 5.85, y: 2.05, w: 3.7, h: 0.25,
+                        fontSize: 12, bold: true, color: 'FFFFFF'
+                    });
+                    
+                    const taskStats = [
+                        { label: '待處理', count: projectTasks.filter(t => t.status === 'To Do').length, color: '64748B', x: 5.95, y: 2.5 },
+                        { label: '進行中', count: projectTasks.filter(t => t.status === 'Doing').length, color: '2563EB', x: 6.9, y: 2.5 },
+                        { label: '審核中', count: projectTasks.filter(t => t.status === 'Review').length, color: 'D97706', x: 7.85, y: 2.5 },
+                        { label: '已完成', count: projectTasks.filter(t => t.status === 'Done').length, color: '059669', x: 8.8, y: 2.5 }
+                    ];
+                    
+                    taskStats.forEach(stat => {
+                        // 數字背景圓圈
+                        overviewSlide.addShape(pptx.ShapeType.ellipse, {
+                            x: stat.x, y: stat.y, w: 0.5, h: 0.5,
+                            fill: { color: stat.color, transparency: 20 }
+                        });
+                        
+                        overviewSlide.addText(stat.count.toString(), {
+                            x: stat.x, y: stat.y + 0.05, w: 0.5, h: 0.3,
+                            fontSize: 20, bold: true, color: stat.color,
+                            align: 'center', valign: 'middle'
+                        });
+                        
+                        overviewSlide.addText(stat.label, {
+                            x: stat.x, y: stat.y + 0.45, w: 0.5, h: 0.18,
+                            fontSize: 7, color: '64748B',
+                            align: 'center'
+                        });
+                    });
+                    
+                    // 風險警示
+                    const riskCount = projectTasks.filter(t => t.risk).length;
+                    if (riskCount > 0) {
+                        overviewSlide.addShape(pptx.ShapeType.rect, {
+                            x: 5.95, y: 3.1, w: 3.65, h: 0.1,
+                            fill: { color: 'FEE2E2' }
+                        });
+                        overviewSlide.addText(`⚠️ ${riskCount} 個風險任務需關注`, {
+                            x: 6.0, y: 3.11, w: 3.55, h: 0.08,
+                            fontSize: 8, bold: true, color: 'DC2626',
+                            align: 'center'
+                        });
+                    }
+
+                    // 近期討論卡片
+                    overviewSlide.addShape(pptx.ShapeType.rect, {
+                        x: 5.7, y: 3.35, w: 4, h: 2.15,
+                        fill: { color: 'FFFFFF' },
+                        line: { color: 'E2E8F0', width: 1 }
+                    });
+                    
+                    overviewSlide.addShape(pptx.ShapeType.rect, {
+                        x: 5.7, y: 3.35, w: 4, h: 0.35,
+                        fill: { color: '7C3AED' }
+                    });
+                    overviewSlide.addText(`💬 近期討論 (${projectMessages.length})`, {
+                        x: 5.85, y: 3.4, w: 3.7, h: 0.25,
+                        fontSize: 12, bold: true, color: 'FFFFFF'
+                    });
+                    
+                    if (projectMessages.length > 0) {
+                        projectMessages.forEach((msg, i) => {
+                            const yPos = 3.8 + (i * 0.52);
+                            
+                            // 訊息卡片
+                            overviewSlide.addShape(pptx.ShapeType.rect, {
+                                x: 5.85, y: yPos, w: 3.7, h: 0.48,
+                                fill: { color: 'F8FAFC' },
+                                line: { color: 'E2E8F0', width: 0.5 }
+                            });
+                            
+                            // 用戶名
+                            overviewSlide.addText(msg.user || 'User', {
+                                x: 5.95, y: yPos + 0.04, w: 3.5, h: 0.15,
+                                fontSize: 8, bold: true, color: '4F46E5'
+                            });
+                            
+                            // 訊息內容
+                            const msgContent = (msg.content || msg.message || '').substring(0, 80);
+                            overviewSlide.addText(msgContent, {
+                                x: 5.95, y: yPos + 0.2, w: 3.5, h: 0.25,
+                                fontSize: 7, color: '475569',
+                                breakLine: true
+                            });
+                        });
+                    } else {
+                        overviewSlide.addText('暫無討論記錄', {
+                            x: 5.85, y: 4.2, w: 3.7, h: 0.8,
+                            fontSize: 10, color: '94A3B8', italic: true,
+                            align: 'center', valign: 'middle'
+                        });
+                    }
+                    
+                    // 頁腳
+                    overviewSlide.addText(`Page ${(idx * 2) + 2} | ${machine?.name || project.name}`, {
+                        x: 0.3, y: 5.5, w: 9.4, h: 0.18,
+                        fontSize: 7, color: '94A3B8',
+                        align: 'left'
+                    });
+
+                    // ========== Gantt 頁 - 精美版 ==========
+                    const ganttSlide = pptx.addSlide();
+                    ganttSlide.background = { color: 'FFFFFF' };
+                    
+                    // 頂部色帶
+                    ganttSlide.addShape(pptx.ShapeType.rect, {
+                        x: 0, y: 0, w: 10, h: 0.05,
+                        fill: { color: '4F46E5' }
+                    });
+                    
+                    // 專案編號
+                    ganttSlide.addShape(pptx.ShapeType.rect, {
+                        x: 0.3, y: 0.25, w: 1.5, h: 0.35,
+                        fill: { color: '4F46E5' }
+                    });
+                    ganttSlide.addText(`Project ${idx + 1} / ${activeProjects.length}`, {
+                        x: 0.3, y: 0.28, w: 1.5, h: 0.3,
+                        fontSize: 11, bold: true, color: 'FFFFFF',
+                        align: 'center'
+                    });
+                    
+                    // 標題
+                    ganttSlide.addText(`${machine?.name || project.name}`, {
+                        x: 0.3, y: 0.7, w: 7, h: 0.5,
+                        fontSize: 28, bold: true, color: '1E293B'
+                    });
+                    ganttSlide.addText(`完整專案時程表 | Detailed Schedule (${projectTasks.length} Tasks)`, {
+                        x: 0.3, y: 1.15, w: 7, h: 0.3,
+                        fontSize: 13, color: '64748B', italic: true
+                    });
+
+                    // 甘特圖視覺化
+                    const tasksWithDates = projectTasks.filter(t => t.startDate && t.endDate).slice(0, 15);
+                    
+                    if (tasksWithDates.length > 0) {
+                        // 表格標題背景
+                        ganttSlide.addShape(pptx.ShapeType.rect, {
+                            x: 0.3, y: 1.6, w: 9.4, h: 0.4,
+                            fill: { color: '4F46E5' }
+                        });
+                        
+                        // 表格標題
+                        const headers = [
+                            { text: '任務名稱', x: 0.35, w: 2.5 },
+                            { text: '負責人', x: 2.9, w: 1.0 },
+                            { text: '狀態', x: 3.95, w: 0.8 },
+                            { text: '開始日期', x: 4.8, w: 1.1 },
+                            { text: '結束日期', x: 5.95, w: 1.1 },
+                            { text: '進度視覺化', x: 7.1, w: 2.5 }
+                        ];
+                        
+                        headers.forEach(h => {
+                            ganttSlide.addText(h.text, {
+                                x: h.x, y: 1.65, w: h.w, h: 0.3,
+                                fontSize: 10, bold: true, color: 'FFFFFF',
+                                align: 'center', valign: 'middle'
+                            });
+                        });
+                        
+                        // 計算時間範圍
+                        const allDates = tasksWithDates.flatMap(t => [new Date(t.startDate), new Date(t.endDate)]);
+                        const minDate = new Date(Math.min(...allDates));
+                        const maxDate = new Date(Math.max(...allDates));
+                        const totalDuration = maxDate - minDate;
+                        
+                        // 狀態顏色
+                        const statusColors = {
+                            'To Do': 'CBD5E1',
+                            'Doing': '3B82F6',
+                            'Review': 'F59E0B',
+                            'Done': '10B981'
+                        };
+                        
+                        // 任務行
+                        tasksWithDates.forEach((task, i) => {
+                            const yPos = 2.05 + (i * 0.28);
+                            const rowBg = i % 2 === 0 ? 'F8FAFC' : 'FFFFFF';
+                            
+                            // 行背景
+                            ganttSlide.addShape(pptx.ShapeType.rect, {
+                                x: 0.3, y: yPos, w: 9.4, h: 0.26,
+                                fill: { color: rowBg },
+                                line: { color: 'E2E8F0', width: 0.5 }
+                            });
+                            
+                            // 任務名稱
+                            ganttSlide.addText(task.title || task.name || '未命名', {
+                                x: 0.35, y: yPos + 0.02, w: 2.5, h: 0.26,
+                                fontSize: 8, color: '1E293B',
+                                breakLine: false
+                            });
+                            
+                            // 負責人
+                            ganttSlide.addText(task.owner || 'Unassigned', {
+                                x: 2.9, y: yPos + 0.02, w: 1.0, h: 0.26,
+                                fontSize: 8, color: '475569',
+                                align: 'center'
+                            });
+                            
+                            // 狀態標籤
+                            const statusColor = statusColors[task.status] || 'CBD5E1';
+                            ganttSlide.addShape(pptx.ShapeType.rect, {
+                                x: 3.98, y: yPos + 0.05, w: 0.74, h: 0.2,
+                                fill: { color: statusColor, transparency: 20 }
+                            });
+                            ganttSlide.addText(task.status || 'To Do', {
+                                x: 3.98, y: yPos + 0.05, w: 0.74, h: 0.2,
+                                fontSize: 7, bold: true, color: statusColor,
+                                align: 'center'
+                            });
+                            
+                            // 日期
+                            const startDate = new Date(task.startDate);
+                            const endDate = new Date(task.endDate);
+                            ganttSlide.addText(startDate.toLocaleDateString('zh-TW', { month: '2-digit', day: '2-digit' }), {
+                                x: 4.8, y: yPos + 0.02, w: 1.1, h: 0.26,
+                                fontSize: 8, color: '475569',
+                                align: 'center'
+                            });
+                            ganttSlide.addText(endDate.toLocaleDateString('zh-TW', { month: '2-digit', day: '2-digit' }), {
+                                x: 5.95, y: yPos + 0.02, w: 1.1, h: 0.26,
+                                fontSize: 8, color: '475569',
+                                align: 'center'
+                            });
+                            
+                            // 甘特條 - 進度視覺化
+                            const offset = ((startDate - minDate) / totalDuration) * 100;
+                            const width = ((endDate - startDate) / totalDuration) * 100;
+                            const barWidth = Math.max((width / 100) * 2.3, 0.15);
+                            const barX = 7.1 + ((offset / 100) * 2.3);
+                            
+                            // 背景軌道
+                            ganttSlide.addShape(pptx.ShapeType.rect, {
+                                x: 7.1, y: yPos + 0.1, w: 2.3, h: 0.1,
+                                fill: { color: 'E2E8F0' }
+                            });
+                            
+                            // 進度條
+                            ganttSlide.addShape(pptx.ShapeType.rect, {
+                                x: barX, y: yPos + 0.08, w: barWidth, h: 0.14,
+                                fill: { color: statusColor }
+                            });
+                            
+                            // 風險標記
+                            if (task.risk) {
+                                ganttSlide.addText('⚠️', {
+                                    x: 9.5, y: yPos + 0.02, w: 0.15, h: 0.26,
+                                    fontSize: 10
+                                });
+                            }
+                        });
+                        
+                        // 圖例
+                        const legendY = Math.min(2.05 + (tasksWithDates.length * 0.28) + 0.15, 5.0);
+                        ganttSlide.addText('狀態圖例:', {
+                            x: 0.3, y: legendY, w: 0.8, h: 0.25,
+                            fontSize: 9, bold: true, color: '64748B'
+                        });
+                        
+                        const legends = [
+                            { label: 'To Do', color: 'CBD5E1', x: 1.2 },
+                            { label: 'Doing', color: '3B82F6', x: 2.2 },
+                            { label: 'Review', color: 'F59E0B', x: 3.2 },
+                            { label: 'Done', color: '10B981', x: 4.2 }
+                        ];
+                        
+                        legends.forEach(leg => {
+                            ganttSlide.addShape(pptx.ShapeType.rect, {
+                                x: leg.x, y: legendY + 0.05, w: 0.15, h: 0.15,
+                                fill: { color: leg.color }
+                            });
+                            ganttSlide.addText(leg.label, {
+                                x: leg.x + 0.2, y: legendY, w: 0.7, h: 0.25,
+                                fontSize: 8, color: '64748B'
+                            });
+                        });
+                        
+                    } else {
+                        // 無資料提示
+                        ganttSlide.addShape(pptx.ShapeType.rect, {
+                            x: 2, y: 3, w: 6, h: 1.5,
+                            fill: { color: 'F8FAFC' },
+                            line: { color: 'E2E8F0', width: 2, dashType: 'dash' }
+                        });
+                        ganttSlide.addText('📅 尚無任務時程資料', {
+                            x: 2, y: 3.4, w: 6, h: 0.6,
+                            fontSize: 18, color: '94A3B8', italic: true,
+                            align: 'center', valign: 'middle'
+                        });
+                    }
+                    
+                    // 頁腳
+                    ganttSlide.addText(`Page ${(idx * 2) + 3} | ${machine?.name || project.name} - Schedule`, {
+                        x: 0.3, y: 5.5, w: 9.4, h: 0.18,
+                        fontSize: 7, color: '94A3B8',
+                        align: 'left'
+                    });
+                });
+
+                // 下載 PPT
+                const fileName = `R&D專案會報_${new Date().toLocaleDateString('zh-TW').replace(/\//g, '')}.pptx`;
+                await pptx.writeFile({ fileName });
+            };
+
+            useEffect(() => {
+                const handleKeyPress = (e) => {
+                    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+                    if (e.key === 'ArrowLeft') setCurrentSlideIndex(prev => Math.max(0, prev - 1));
+                    if (e.key === 'ArrowRight') setCurrentSlideIndex(prev => Math.min(totalSlides - 1, prev + 1));
+                    if (e.key === 'f') setIsFocusMode(prev => !prev);
+                    if (e.key === 'l') setLaserMode(prev => !prev);
+                    if (e.key === 'n') setShowNotes(prev => !prev);
+                };
+                window.addEventListener('keydown', handleKeyPress);
+                return () => window.removeEventListener('keydown', handleKeyPress);
+            }, [totalSlides]);
+
+            // 渲染當前內容
+            const renderContent = () => {
+                if (currentSlideIndex === 0) {
+                    // 封面
+                    return (
+                        <div className="h-full flex flex-col p-16 bg-slate-900 text-white relative overflow-hidden fade-enter-active">
+                            <div className="absolute top-0 right-0 w-[800px] h-[800px] bg-indigo-600/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3"></div>
+                            <div className="absolute bottom-0 left-0 w-[600px] h-[600px] bg-purple-600/20 rounded-full blur-3xl translate-y-1/3 -translate-x-1/4"></div>
+                            
+                            <div className="relative z-10 flex-1 flex flex-col justify-center">
+                                <div className="mb-12">
+                                    <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-white/10 backdrop-blur-md rounded-full text-xs font-bold tracking-widest text-indigo-300 mb-8 border border-white/10">
+                                        <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></span>
+                                        LIVE MEETING MODE
+                                    </div>
+                                    <h1 className="text-8xl font-black mb-6 leading-tight tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white via-slate-200 to-slate-400">
+                                        R&D Project<br/>Review
+                                    </h1>
+                                    <p className="text-2xl font-light text-slate-300">
+                                        研發專案執行進度與團隊工作分析
+                                    </p>
+                                </div>
+                                
+                                <div className="grid grid-cols-4 gap-6 mt-8">
+                                    {[
+                                        { label: 'Active Projects', val: activeProjects.length, icon: '🚀', sub: '進行中專案' },
+                                        { label: 'Pending Tasks', val: tasks.filter(t => t.status === 'Doing').length, icon: '⚡', sub: '執行中任務' },
+                                        { label: 'Risk Items', val: tasks.filter(t => t.risk).length, icon: '🔥', sub: '風險項目', alert: true },
+                                        { label: 'Avg Progress', val: `${Math.round(activeProjects.reduce((sum, p) => sum + (p.progress || 0), 0) / activeProjects.length || 0)}%`, icon: '📈', sub: '平均進度' }
+                                    ].map((item, i) => (
+                                        <div key={i} className={`bg-white/5 backdrop-blur-sm p-6 rounded-2xl border ${item.alert ? 'border-red-500/30 bg-red-500/10' : 'border-white/10'} hover:bg-white/10 transition-all group`}>
+                                            <div className="flex justify-between items-start mb-4">
+                                                <span className="text-2xl opacity-50 grayscale group-hover:grayscale-0 transition-all">{item.icon}</span>
+                                                {item.alert && <AlertTriangle size={16} className="text-red-400" />}
+                                            </div>
+                                            <div className="text-4xl font-black mb-1 group-hover:scale-105 transition-transform origin-left">{item.val}</div>
+                                            <div className="text-xs font-bold text-slate-400 tracking-wider uppercase">{item.label}</div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                            <div className="relative z-10 flex justify-between items-end text-white/30 text-xs font-mono">
+                                <span>按 'F' 進入全螢幕專注模式 | 按 'L' 開啟雷射筆</span>
+                                <span>{new Date().toLocaleDateString('zh-TW')}</span>
+                            </div>
+                        </div>
+                    );
+                }
+
+                if (currentSlideIndex === 1) {
+                    // 第二頁：人力資源總覽
+                    // 計算全局人力負載
+                    const allActiveTasks = tasks.filter(t => {
+                        const project = projects.find(p => p.id === t.projectId);
+                        if (!project || !project.machineId) return false;
+                        const machine = machines.find(m => m.id === project.machineId);
+                        return machine && machine.status === 'Active' && project.progress < 100;
+                    });
+
+                    const globalWorkload = {};
+                    allActiveTasks.forEach(t => {
+                        const owner = t.owner || 'Unassigned';
+                        if (!globalWorkload[owner]) {
+                            globalWorkload[owner] = { total: 0, doing: 0, todo: 0, review: 0, projects: new Set() };
+                        }
+                        globalWorkload[owner].total += 1;
+                        if (t.status === 'Doing') globalWorkload[owner].doing += 1;
+                        if (t.status === 'To Do') globalWorkload[owner].todo += 1;
+                        if (t.status === 'Review') globalWorkload[owner].review += 1;
+                        
+                        const project = projects.find(p => p.id === t.projectId);
+                        if (project) globalWorkload[owner].projects.add(project.id);
+                    });
+
+                    const topWorkers = Object.entries(globalWorkload)
+                        .map(([name, data]) => ({ name, ...data, projectCount: data.projects.size }))
+                        .sort((a, b) => b.total - a.total)
+                        .slice(0, 10);
+
+                    const maxLoad = Math.max(...topWorkers.map(w => w.total), 1);
+
+                    // 專案任務分佈
+                    const projectStats = activeProjects.map(p => {
+                        const machine = machines.find(m => m.id === p.machineId);
+                        const projectTasks = tasks.filter(t => t.projectId === p.id);
+                        return {
+                            name: machine?.name || p.name,
+                            taskCount: projectTasks.length,
+                            progress: p.progress || 0
+                        };
+                    }).sort((a, b) => b.taskCount - a.taskCount).slice(0, 8);
+
+                    return (
+                        <div className="h-full flex flex-col p-10 bg-gradient-to-br from-orange-50 via-white to-purple-50 fade-enter-active">
+                            {/* 頂部色帶 */}
+                            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-orange-500 via-purple-500 to-indigo-500"></div>
+                            
+                            {/* 標題 */}
+                            <div className="mb-6">
+                                <div className="flex items-center gap-4 mb-3">
+                                    <span className="px-3 py-1 bg-orange-600 text-white text-xs font-bold rounded-full tracking-wider uppercase shadow-sm">
+                                        Resource Overview
+                                    </span>
+                                    <h2 className="text-4xl font-black text-slate-800 tracking-tight">
+                                        整體人力資源分析
+                                    </h2>
+                                </div>
+                                <p className="text-slate-500 text-lg ml-32">
+                                    跨專案人員工作負載與任務分佈總覽
+                                </p>
+                            </div>
+
+                            <div className="grid grid-cols-12 gap-6 flex-1 min-h-0">
+                                {/* 左側：人力負載排行 */}
+                                <div className="col-span-7 flex flex-col gap-4">
+                                    {/* 人力負載卡片 */}
+                                    <div className="bg-white p-6 rounded-2xl shadow-lg border border-slate-200 flex flex-col flex-1 min-h-0">
+                                        <div className="flex items-center justify-between mb-4">
+                                            <h3 className="text-xl font-bold text-slate-800 flex items-center gap-3">
+                                                <div className="p-2 bg-orange-100 rounded-xl"><BarChart2 size={20} className="text-orange-600"/></div>
+                                                人員工作負載排行 TOP 10
+                                            </h3>
+                                            <div className="text-sm text-slate-500">
+                                                總計 {allActiveTasks.length} 個活躍任務
+                                            </div>
+                                        </div>
+                                        
+                                        <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 space-y-3">
+                                            {topWorkers.map((worker, idx) => (
+                                                <div key={worker.name} className="group">
+                                                    <div className="flex items-center gap-3 mb-2">
+                                                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-orange-400 to-purple-500 flex items-center justify-center text-white font-bold text-sm shadow-md">
+                                                            {idx + 1}
+                                                        </div>
+                                                        <div className="flex-1">
+                                                            <div className="flex justify-between items-baseline">
+                                                                <span className="text-sm font-bold text-slate-800">{worker.name}</span>
+                                                                <span className="text-xs text-slate-500">{worker.projectCount} 個專案</span>
+                                                            </div>
+                                                        </div>
+                                                        <div className="text-lg font-black text-orange-600 w-12 text-right">
+                                                            {worker.total}
+                                                        </div>
+                                                    </div>
+                                                    
+                                                    {/* 進度條 */}
+                                                    <div className="flex items-center gap-2 ml-11">
+                                                        <div className="flex-1 h-6 bg-slate-100 rounded-full overflow-hidden flex shadow-inner">
+                                                            <div className="bg-blue-500 h-full flex items-center justify-center" 
+                                                                 style={{width: `${(worker.doing / maxLoad) * 100}%`}}
+                                                                 title={`Doing: ${worker.doing}`}>
+                                                                {worker.doing > 0 && <span className="text-[9px] text-white font-bold px-1">{worker.doing}</span>}
+                                                            </div>
+                                                            <div className="bg-amber-400 h-full flex items-center justify-center" 
+                                                                 style={{width: `${(worker.review / maxLoad) * 100}%`}}
+                                                                 title={`Review: ${worker.review}`}>
+                                                                {worker.review > 0 && <span className="text-[9px] text-white font-bold px-1">{worker.review}</span>}
+                                                            </div>
+                                                            <div className="bg-slate-300 h-full flex items-center justify-center" 
+                                                                 style={{width: `${(worker.todo / maxLoad) * 100}%`}}
+                                                                 title={`To Do: ${worker.todo}`}>
+                                                                {worker.todo > 0 && <span className="text-[9px] text-slate-600 font-bold px-1">{worker.todo}</span>}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                        
+                                        <div className="flex justify-end gap-4 text-[10px] text-slate-500 pt-3 border-t border-slate-100 mt-3">
+                                            <span className="flex items-center gap-1"><div className="w-3 h-3 bg-blue-500 rounded-full"></div>Doing</span>
+                                            <span className="flex items-center gap-1"><div className="w-3 h-3 bg-amber-400 rounded-full"></div>Review</span>
+                                            <span className="flex items-center gap-1"><div className="w-3 h-3 bg-slate-300 rounded-full"></div>To Do</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* 右側：專案任務分佈 + 統計 */}
+                                <div className="col-span-5 flex flex-col gap-4">
+                                    {/* 整體統計卡片 */}
+                                    <div className="grid grid-cols-2 gap-3">
+                                        {[
+                                            { label: '總專案數', value: activeProjects.length, icon: '📊', color: 'indigo' },
+                                            { label: '總任務數', value: allActiveTasks.length, icon: '📋', color: 'blue' },
+                                            { label: '參與人員', value: Object.keys(globalWorkload).length, icon: '👥', color: 'purple' },
+                                            { label: '平均負載', value: Math.round(allActiveTasks.length / Math.max(Object.keys(globalWorkload).length, 1)), icon: '⚖️', color: 'orange' }
+                                        ].map((stat, idx) => (
+                                            <div key={idx} className={`bg-white p-4 rounded-xl shadow-md border border-${stat.color}-100`}>
+                                                <div className="text-2xl mb-1">{stat.icon}</div>
+                                                <div className={`text-3xl font-black text-${stat.color}-600 mb-1`}>{stat.value}</div>
+                                                <div className="text-xs text-slate-500 font-medium">{stat.label}</div>
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    {/* 專案任務排行 */}
+                                    <div className="bg-white p-5 rounded-2xl shadow-lg border border-slate-200 flex flex-col flex-1 min-h-0">
+                                        <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+                                            <div className="p-1.5 bg-purple-100 rounded-lg"><Target size={18} className="text-purple-600"/></div>
+                                            專案任務數排行
+                                        </h3>
+                                        
+                                        <div className="flex-1 overflow-y-auto custom-scrollbar space-y-3">
+                                            {projectStats.map((proj, idx) => (
+                                                <div key={idx} className="group">
+                                                    <div className="flex justify-between items-center mb-1.5">
+                                                        <span className="text-sm font-semibold text-slate-700 truncate flex-1" title={proj.name}>
+                                                            {proj.name}
+                                                        </span>
+                                                        <span className="text-sm font-black text-purple-600 ml-2">{proj.taskCount}</span>
+                                                    </div>
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
+                                                            <div className="h-full bg-gradient-to-r from-purple-500 to-indigo-500 rounded-full transition-all duration-500" 
+                                                                 style={{width: `${proj.progress}%`}}>
+                                                            </div>
+                                                        </div>
+                                                        <span className="text-[10px] text-slate-400 w-10 text-right">{proj.progress}%</span>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* 頁腳 */}
+                            <div className="mt-4 text-xs text-slate-400 text-center">
+                                Page 2 | Resource Overview - Generated on {new Date().toLocaleDateString('zh-TW')}
+                            </div>
+                        </div>
+                    );
+                }
+
+                // 專案內容頁面計算 (調整索引)
+                // index 2 -> Proj 0 Overview
+                // index 3 -> Proj 0 Gantt
+                // index 4 -> Proj 1 Overview
+                // index 5 -> Proj 1 Gantt
+                const adjustedIndex = currentSlideIndex - 2;
+                const projectIndex = Math.floor(adjustedIndex / 2);
+                const isGanttPage = adjustedIndex % 2 === 1;
+                const project = activeProjects[projectIndex];
+
+                if (!project) return null;
+
+                if (isGanttPage) {
+                    return (
+                        <ProjectGanttSlide 
+                            project={project}
+                            currentSlide={currentSlideIndex}
+                            totalProjects={activeProjects.length}
+                            machines={machines}
+                            tasks={tasks}
+                        />
+                    );
+                } else {
+                    return (
+                        <ProjectOverviewSlide 
+                            project={project}
+                            currentSlide={currentSlideIndex}
+                            totalProjects={activeProjects.length}
+                            machines={machines}
+                            tasks={tasks}
+                            messages={messages}
+                            toggleNotes={() => setShowNotes(!showNotes)}
+                        />
+                    );
+                }
+            };
+
+            if (loading) {
+                return (
+                    <div className="slide-container bg-slate-900">
+                        <div className="text-center text-white">
+                            <div className="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                            <p className="text-lg font-light tracking-widest animate-pulse">SYSTEM LOADING</p>
+                        </div>
+                    </div>
+                );
+            }
+
+            // 取得當前專案 ID 以供筆記使用
+            const currentProjIndex = Math.floor((currentSlideIndex - 1) / 2);
+            const currentProject = currentSlideIndex > 0 ? activeProjects[currentProjIndex] : null;
+
+            return (
+                <div className={`slide-container ${isFocusMode ? 'focus-mode' : ''}`}>
+                    <div className="slide relative overflow-hidden">
+                        {renderContent()}
+
+                        {/* 會議記錄滑出面板 (Global) */}
+                        <div className={`absolute top-0 right-0 h-full w-[42%] bg-white shadow-2xl transform transition-transform duration-300 z-10 drawer-panel border-l border-slate-200 ${showNotes && currentSlideIndex > 0 ? 'translate-x-0' : 'translate-x-[110%]'}`}>
+                            <div className="h-full relative pt-12">
+                                <button 
+                                    onClick={() => setShowNotes(false)}
+                                    className="absolute top-2 right-2 p-2 hover:bg-slate-100 rounded-full text-slate-500"
+                                >
+                                    <X size={20} />
+                                </button>
+                                <MeetingNotes projectId={currentProject?.id} />
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* 控制列 */}
+                    <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-4 bg-slate-900/90 backdrop-blur-xl pl-6 pr-2 py-2 rounded-full shadow-2xl border border-white/10 no-print z-50 transition-all duration-300 ${isFocusMode ? 'translate-y-[150%] hover:translate-y-0' : 'translate-y-0'}`}>
+                        <div className="flex items-center gap-4 text-white/80 mr-4 border-r border-white/10 pr-4">
+                            <span className="text-xs font-bold tracking-widest w-16 text-center">
+                                {currentSlideIndex === 0 ? 'COVER' : `SLIDE ${currentSlideIndex}/${totalSlides-1}`}
+                            </span>
+                            <MeetingTimer />
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <button onClick={() => setCurrentSlideIndex(prev => Math.max(0, prev - 1))} disabled={currentSlideIndex === 0} className="p-2.5 rounded-full bg-white/10 text-white hover:bg-indigo-500 disabled:opacity-30 transition-all">
+                                <ChevronLeft size={20} />
+                            </button>
+                            <button onClick={() => setCurrentSlideIndex(prev => Math.min(totalSlides - 1, prev + 1))} disabled={currentSlideIndex === totalSlides - 1} className="p-2.5 rounded-full bg-indigo-600 text-white hover:bg-indigo-500 transition-all shadow-lg shadow-indigo-500/30">
+                                <ChevronRight size={20} />
+                            </button>
+                        </div>
+                        <div className="w-px h-6 bg-white/20 mx-2"></div>
+                        <div className="flex gap-1">
+                            <button onClick={() => setLaserMode(!laserMode)} className={`p-2.5 rounded-full transition-all ${laserMode ? 'bg-red-500 text-white shadow-[0_0_15px_rgba(239,68,68,0.5)]' : 'text-slate-400 hover:text-white hover:bg-white/10'}`} title="雷射筆 (L)">
+                                <MousePointer2 size={18} />
+                            </button>
+                            <button onClick={() => setShowNotes(!showNotes)} className={`p-2.5 rounded-full transition-all ${showNotes ? 'bg-indigo-500 text-white' : 'text-slate-400 hover:text-white hover:bg-white/10'}`} title="會議筆記 (N)">
+                                <PenTool size={18} />
+                            </button>
+                            <button onClick={() => setIsFocusMode(!isFocusMode)} className={`p-2.5 rounded-full transition-all ${isFocusMode ? 'text-blue-400' : 'text-slate-400 hover:text-white hover:bg-white/10'}`} title="專注模式 (F)">
+                                {isFocusMode ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
+                            </button>
+                            <div className="w-px h-6 bg-white/20 mx-1"></div>
+                            <button onClick={generatePPT} className="p-2.5 rounded-full text-slate-400 hover:text-green-400 hover:bg-white/10 transition-all" title="下載 PowerPoint">
+                                <Download size={18} />
+                            </button>
+                            <button onClick={() => window.print()} className="p-2.5 rounded-full text-slate-400 hover:text-white hover:bg-white/10 transition-all" title="列印">
+                                <Printer size={18} />
+                            </button>
+                            <button onClick={() => window.location.href = '/server/index.html'} className="p-2.5 rounded-full text-slate-400 hover:text-blue-400 hover:bg-white/10 transition-all" title="回首頁">
+                                <Home size={18} />
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<ProjectReportPresentation />);
+    </script>
+</body>
+</html>
